@@ -6,12 +6,6 @@ output:
 ---
 
 
-
-
-**OBJECTIVE - TO CALCULATE THE MEANSCORE FOR THE 8 ITEMS IN T1 AND TO APPLY LOGISTIC 
-REGRESSION ON THIS MEANSCORE TO FIND THE PREDICTORS FOR KNOW/DON'T KNOW BINARY OF 
-THIS MEANSCORE**
-
 ```{r}
 project11<-read.csv("project11.csv",stringsAsFactors = FALSE,strip.white = TRUE,sep=",")
 T1<-subset(project11,select=c(STIDnum:RCT_GROUP,T1_EATHEAL:T1_BREA,Female,Grade,T1_pros,
