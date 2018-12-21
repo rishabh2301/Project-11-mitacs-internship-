@@ -1,0 +1,482 @@
+---
+title: "multilevel imputation"
+author: "rishabh saraf"
+date: "July 6, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#reading the long data
+library(tidyverse)
+long<-read.csv("longdata.csv",stringsAsFactors = FALSE,na.strings = "NA",strip.white = TRUE,sep=",")
+glimpse(long)
+```
+
+```{r}
+#meanscore2 - calculated after taking don't know as NA, only keeping this meanscore in the analysis
+w<-subset(long,select=c(STIDnum,Female,Grade,Time,otdif:case,meanscore2))
+w<-subset(w,!is.na(Grade) & !is.na(Female)) #deleting those observations missing in Grade and Female
+w$Grade7<-ifelse(w$Grade==7,1,0) #adding grade as binary, a new variable Grade7
+w$STIDnum<-as.factor(w$STIDnum) #converting the cluster variable to factor
+w<-w[,c(-3)] #removing the previous Grade variable
+colnames(w)[9]<-"meanscore" 
+w$Grade7<-as.integer(w$Grade7) 
+w$Time<-as.factor(w$Time) #taking Time as factor
+glimpse(w)
+```
+
+
+```{r}
+#complete case analysis
+fit0<-lme(meanscore~case*Time  , random= ~1|STIDnum, data = w,method = c("ML"), na.action = na.omit)
+summary(fit0)
+```
+
+```{r}
+#adding the Female variable also in interaction
+fit1<-lme(meanscore~case*Time*Female , random = ~1|STIDnum, data = w, method = c("ML"),na.action = na.exclude)
+summary(fit1)
+```
+
+```{r}
+#comparing fit1 and fit0
+anova(fit1,fit0)
+```
+
+```{r}
+#checking the correlation between pros and total difficulties score
+cor(subset(w,select = c(otdif:pros_T)), use = "complete.obs")
+```
+
+
+```{r}
+#adding the pros and total difficulties variable also in the model kept only pros_T because correlation (pros_T,otdif_T) =-0.6 
+
+fit2<-lme(meanscore~case*Time*Female + pros +pros_T +otdif , random = ~1|STIDnum, data = w, method = c("ML"),na.action = na.exclude)
+summary(fit2)
+```
+
+```{r}
+#comparing fit2 with fit1 : number of complete cases decreases after adding the pros and total difficulties variables 
+#to the model, therefore cannot perform LRT test, but the AIC of fit2 is significantly less from fit1 so fit2 is kept as the final model
+```
+
+
+
+```{r}
+#single-level multiple imputation
+library(mice)
+ini<-mice(w,maxit=0)
+meth<-ini$meth
+meth
+```
+
+```{r}
+#predictor matrix for pmm(predictive mean matching)
+pred<-ini$pred
+pred[c("STIDnum","Female","Time","case","Grade7"),]=0
+pred["otdif","otdif_T"]=1
+pred["pros","pros_T"]=1
+pred[,"STIDnum"]=0
+pred
+```
+
+
+```{r}
+#perform imputation, creates 30 imputed datasets 
+imp.pmm<-mice(w,meth=meth,pred=pred,m=30,maxit = 10,seed = 123)
+```
+
+```{r}
+#check for the convergence of the imputations,  since there is no
+#significant pattern for any of the imputed variables, after 10 iterations, the imputations have converged
+plot(imp.pmm)
+```
+
+
+```{r}
+#comparing the ICC for the first imputed dataset from pmm
+#with the complete case analysis
+library(multilevel)
+c1<-mice::complete(imp.pmm,1) #1st imputed dataset , can be anyone from 1 to 30
+w$id<-w$STIDnum
+c1$id<-c1$STIDnum
+icc.pmm<-data.frame(variable = c("meanscore","total difficulties(self rating)","pro social(self rating)","total difficulties(teacher's rating)","pro social(teacher's rating)"),
+  listwise_deletion = c(ICC1(aov(meanscore~id,w)),
+                        ICC1(aov(otdif~id,w)),
+                        ICC1(aov(pros~id,w)),
+                        ICC1(aov(otdif_T~id,w)),
+                        ICC1(aov(pros_T~id,w))),
+                pmm = c(ICC1(aov(meanscore~id,c1)),
+                        ICC1(aov(otdif~id,c1)),
+                        ICC1(aov(pros~id,c1)),
+                        ICC1(aov(otdif_T~id,c1)),
+                        ICC1(aov(pros_T~id,c1)))
+        )
+icc.pmm
+
+#on changing the imputed data set to anyone of the 30 sets 
+#the ICC shows a slight variation but it is still very less compared to 
+#list-wise deletion
+```
+
+
+
+```{r}
+#fitting the final model from list-wise deletion to
+#the imputed datasets list and then pooling the results
+library(lme4)
+pmmlist<-mids2mitml.list(imp.pmm) # the analysis in done on the list of 30 imputed sets and then pooling of results using rubin's rule
+fit.pmm<-with(pmmlist, lmer(meanscore~case*Time*Female + pros + pros_T + otdif + (1|STIDnum), REML = TRUE))
+testEstimates(fit.pmm, var.comp = TRUE)
+
+#the estimates are generally biased compared to the listwise deletion
+```
+
+
+```{r}
+#applying random forest single level multiple imputation
+meth["otdif"]<-"rf"
+meth["pros"]<-"rf"
+meth["otdif_T"]<-"rf"
+meth["pros_T"]<-"rf"
+meth["meanscore"]<-"rf"
+meth
+```
+
+```{r}
+#single level imputation using random forest creates 30 imputed datasets
+imp.rf<-mice(w,meth=meth,pred=pred,m=30,maxit = 10,seed = 123)
+#imputations not printed.
+```
+
+
+```{r}
+#check for the convergence of the imputations,  since there is no
+#significant pattern for any of the imputed variables,after 10 iterations, the imputations have converged
+plot(imp.rf)
+```
+
+
+```{r}
+#comparing the ICC for the first imputed dataset from random forest
+#with the complete case analysis
+library(multilevel)
+c2<-mice::complete(imp.rf,1) #1st imputed dataset , can be anyone from 1 to 30
+c2$id<-c2$STIDnum
+icc.rf<-data.frame(variable = c("meanscore","total difficulties(self rating)","pro social(self rating)","total difficulties(teacher's rating)","pro social(teacher's rating)"),
+  listwise_deletion = c(ICC1(aov(meanscore~id,w)),
+                        ICC1(aov(otdif~id,w)),
+                        ICC1(aov(pros~id,w)),
+                        ICC1(aov(otdif_T~id,w)),
+                        ICC1(aov(pros_T~id,w))),
+        random_forest = c(ICC1(aov(meanscore~id,c2)),
+                        ICC1(aov(otdif~id,c2)),
+                        ICC1(aov(pros~id,c2)),
+                        ICC1(aov(otdif_T~id,c2)),
+                        ICC1(aov(pros_T~id,c2)))
+        )
+icc.rf
+#on changing the imputed data set to anyone of the 30 sets 
+#the ICC shows a slight variation but it is still very less compared to 
+#list-wise deletion
+```
+
+
+```{r}
+#fitting the final model from list-wise deletion to
+#the imputed datasets list and then pooling the results
+rflist<-mids2mitml.list(imp.rf) # the analysis in done on the list of 30 imputed sets and then pooling of results using rubin's rule
+fit.rf<-with(rflist, lmer(meanscore~case*Time*Female + pros + pros_T + otdif + (1|STIDnum), REML = TRUE))
+testEstimates(fit.rf, var.comp = TRUE)
+#the estimates are generally biased compared to the listwise deletion
+```
+```{r}
+#coverting the likert items to ordinal for proportional odds logitic regression imputation
+S1<-subset(long,select=c(EATHEAL:BREA))
+for(i in names(S1)){
+  long[[i]]<-ifelse(long[[i]]=="Don't know",NA,long[[i]])
+  long[[i]]<-factor(long[[i]],levels= c("Rarely or Never",
+                                  "Less than once a week",
+                                  "Once or twice a week","Everyday or almost everyday"))
+  j<-paste(i,"I",sep = "_")
+  long[[j]]<-as.numeric(long[[i]])-1
+  long[[j]]<-factor(long[[j]], levels = c("0","1","2","3"), ordered = TRUE)
+}
+
+```
+
+```{r}
+l<-subset(long,select=c(STIDnum,Female,Grade7,EATHEAL_I:BREA_I,case,otdif:pros_T))
+l<-subset(l,!is.na(Grade7)&!is.na(Female))
+l$Time<-w$Time
+l$STIDnum<-as.factor(l$STIDnum)
+l$meanscore<-NA #adding a new variable to be updated as mean of the 8 imputed likert items after each imputation 
+glimpse(l)
+```
+
+```{r}
+ini<-mice(l,maxit = 0)
+pred<-ini$pred
+meth<-ini$meth
+pred[c("STIDnum","case","Female","Time","Grade7"),]=0
+pred[c("meanscore"),]=1
+meth<-ini$method
+meth["STIDnum"]<-""
+meth["Female"]<-""
+meth["case"]<-""
+meth["Time"]<-""
+meth["meanscore"]<-"~ I((as.numeric(as.character(EATHEAL_I))+as.numeric(as.character(ART_I))+as.numeric(as.character(YOGA_I))+
+                       as.numeric(as.character(RELAXA_I))+as.numeric(as.character(DANCING_I))+as.numeric(as.character(MUSIC_I))+as.numeric(as.character(EXER_I))
+                     +as.numeric(as.character(BREA_I)))/8)" #passive imputation , meanscore updated as mean of 8 imputed likert items for each imputed dataset
+pred[,c("STIDnum","meanscore")]=0
+
+```
+
+```{r}
+pred["otdif","otdif_T"]=1
+pred["pros","pros_T"]=1
+
+```
+
+```{r}
+pred[c("EATHEAL_I","ART_I","YOGA_I","RELAXA_I","EXER_I","DANCING_I","MUSIC_I","BREA_I","otdif","otdif_T","pros","pros_T","meanscore"),]
+```
+
+```{r}
+meth[c("EATHEAL_I","ART_I","YOGA_I","RELAXA_I","EXER_I","DANCING_I","MUSIC_I","BREA_I","otdif","otdif_T","pros","pros_T")]
+```
+
+```{r}
+meth[c("meanscore")] #passive imputation
+```
+
+
+```{r}
+#single level imputation using random forest creates 30 imputed datasets
+imp.polr<-mice::mice(data=l,maxit=10,m=30,meth = meth,
+                         predictorMatrix  = pred)
+#imputations not printed.
+```
+
+
+```{r}
+
+#check for the convergence of the imputations,  since there is no
+#significant pattern for any of the imputed variables,after 10 iterations, the imputations have converged
+plot(imp.polr)
+```
+
+```{r}
+#comparing the ICC for the first imputed dataset from random forest
+#with the complete case analysis
+library(multilevel)
+c3<-mice::complete(imp.polr,1) #1st imputed dataset , can be anyone from 1 to 30
+c3$id<-c3$STIDnum
+icc.polr<-data.frame(variable = c("meanscore","total difficulties(self rating)","pro social(self rating)","total difficulties(teacher's rating)","pro social(teacher's rating)"),
+  listwise_deletion = c(ICC1(aov(meanscore~id,w)),
+                        ICC1(aov(otdif~id,w)),
+                        ICC1(aov(pros~id,w)),
+                        ICC1(aov(otdif_T~id,w)),
+                        ICC1(aov(pros_T~id,w))),
+                polr = c(ICC1(aov(meanscore~id,c3)),
+                        ICC1(aov(otdif~id,c3)),
+                        ICC1(aov(pros~id,c3)),
+                        ICC1(aov(otdif_T~id,c3)),
+                        ICC1(aov(pros_T~id,c3)))
+        )
+icc.polr
+#on changing the imputed data set to anyone of the 30 sets 
+#the ICC shows a slight variation but it is still very less compared to 
+#list-wise deletion, however the ICC for meanscore shows a slight increase from the
+#previous two methods
+#icc for repeated measures same as pmm (since pmm is used for their imputation)
+```
+
+```{r}
+#fitting the final model from list-wise deletion to
+#the imputed datasets list and then pooling the results
+polrlist<-mids2mitml.list(imp.polr) # the analysis in done on the list of 30 imputed sets and then pooling of results using rubin's rule
+fit.polr<-with(polrlist, lmer(meanscore~case*Time*Female + pros + pros_T + otdif + (1|STIDnum), REML = TRUE))
+testEstimates(fit.polr, var.comp = TRUE)
+#the estimates are generally biased compared to the listwise deletion 
+```
+
+
+```{r}
+library(mice)
+library(miceadds)
+library(mice)
+
+w<-w[c(-11)]
+ini<-mice(w,maxit=0)
+meth<-ini$meth
+pred<-ini$pred
+pred[c("STIDnum","Female","Time","case","Grade7"),]=0
+pred["otdif","otdif_T"]=1
+pred["pros","pros_T"]=1
+pred[,"STIDnum"]=0
+
+#two level fully conditional specification
+#using pan 
+
+meth["otdif"]<-"2l.pan"
+meth["pros"]<-"2l.pan"
+meth["otdif_T"]<-"2l.pan"
+meth["pros_T"]<-"2l.pan"
+meth["pros"]<-"2l.pan"
+meth["meanscore"]<-"2l.pan"
+```
+
+
+```{r}
+#recoding the predictor matrix to add indicators 
+#for the different levels of predictors
+# -2 : clustering variable
+# 1 : overall effect (level 2 predictor)
+#2 : random effect (level 1 predictor)
+pred["otdif",]=c(-2,1,2,0,2,2,2,1,2,1)
+pred["pros",]=c(-2,1,2,2,0,2,2,1,2,1)
+pred["otdif_T",]=c(-2,1,2,2,2,0,2,1,2,1)
+pred["pros_T",]=c(-2,1,2,2,2,2,0,1,2,1)
+pred["meanscore",]=c(-2,1,2,2,2,2,2,1,0,1)
+pred
+
+```
+
+```{r}
+pred[c("meanscore","otdif","otdif_T","pros","pros_T"),]
+```
+
+
+```{r}
+#imputation using two-level fcs 
+#in the mice package in fcs the clustering variable needs to be 
+#integer as mice.2l.pan cannot read the clustering variable as factor
+w$STIDnum<-as.integer(as.character(w$STIDnum)) #converting the clustering variable to integer
+
+#performing two-level fcs imputations creating 30 imputed datasets
+imp.2l.pan<-mice::mice(data=w,maxit=10,m=30,imputationMethod = meth,
+                          predictorMatrix = pred,seed = 123)
+
+
+#imputations not printed.
+```
+
+```{r}
+#check for the convergence of the imputations,  since there is no
+#significant pattern for any of the imputed variables,after 10 iterations, the imputations have converged
+
+plot(imp.2l.pan)
+```
+
+```{r}
+#comparing the ICC for the first imputed dataset from two-level fcs
+#with the complete case analysis
+c4<-mice::complete(imp.2l.pan,1) #1st imputed dataset , can be anyone from 1 to 30
+c4$id<-as.factor(as.character(c4$STIDnum))
+w$id<-w$STIDnum
+icc.fcs<-data.frame(variable = c("meanscore","total difficulties(self rating)","pro social(self rating)","total difficulties(teacher's rating)","pro social(teacher's rating)"),
+  listwise_deletion = c(ICC1(aov(meanscore~id,w)),
+                        ICC1(aov(otdif~id,w)),
+                        ICC1(aov(pros~id,w)),
+                        ICC1(aov(otdif_T~id,w)),
+                        ICC1(aov(pros_T~id,w))),
+        two_level_fcs = c(ICC1(aov(meanscore~id,c4)),
+                        ICC1(aov(otdif~id,c4)),
+                        ICC1(aov(pros~id,c4)),
+                        ICC1(aov(otdif_T~id,c4)),
+                        ICC1(aov(pros_T~id,c4)))
+        )
+icc.fcs
+
+#on changing the imputed data set to anyone of the 30 sets 
+#the ICC shows a slight variation but it is still very less compared to 
+#list-wise deletion
+```
+
+
+```{r}
+
+#fitting the final model from list-wise deletion to
+#the imputed datasets list and then pooling the results
+panlist<-mids2mitml.list(imp.2l.pan) # the analysis in done on the list of 30 imputed sets and then pooling of results using rubin's rule
+panlist<-within(panlist,{STIDnum<-as.factor(as.character(STIDnum))}) #converting the clustering variable to factor again for mixed
+                                                                     #effect model
+fit.fcs<-with(panlist, lmer(meanscore~case*Time*Female + pros + pros_T + otdif + (1|STIDnum), REML = FALSE))
+testEstimates(fit.fcs, var.comp = TRUE)
+
+#the estimates are generally biased compared to the listwise deletion
+```
+
+
+
+
+```{r}
+#jointmodeling
+library(jomo)
+library(mitml)
+
+w$STIDnum<-as.factor(as.character(w$STIDnum))#clustering variable as factor
+m<-list(meanscore +otdif_T+otdif+pros+pros_T~ case*Time*Grade7*Female+(1|STIDnum)) #can include only the completely observed predictors in the model
+
+
+#running jomo imputation creating 100 imputed data sets 
+impjomo<-mitml::panImpute(data = w,formula = m,n.burn = 100000,n.iter = 20000, m =100)
+
+#imputations not printed
+```
+
+```{r}
+summary(impjomo) 
+#Rhat should be < 1.050 for convergence for all the 3 parameters
+```
+
+
+
+```{r}
+#shows convergence and no occurence of auto-correlation between imputed datasets 
+#after 20000 iterations (imputations have converged)
+plot(impjomo)
+```
+
+
+
+```{r}
+#comparing the ICC for the first imputed dataset from two-level fcs
+#with the complete case analysis
+c5<-mitml::mitmlComplete(impjomo, print = c(1)) #1st imputed dataset , can be anyone from 1 to 100
+c5$id<-c5$STIDnum
+icc.jomo  <-data.frame(variable = c("meanscore","total difficulties(self rating)","pro social(self rating)","total difficulties(teacher's rating)","pro social(teacher's rating)"),
+  listwise_deletion = c(ICC1(aov(meanscore~id,w)),
+                        ICC1(aov(otdif~id,w)),
+                        ICC1(aov(pros~id,w)),
+                        ICC1(aov(otdif_T~id,w)),
+                        ICC1(aov(pros_T~id,w))),
+    joint_modeling = c(ICC1(aov(meanscore~id,c5)),
+                        ICC1(aov(otdif~id,c5)),
+                        ICC1(aov(pros~id,c5)),
+                        ICC1(aov(otdif_T~id,c5)),
+                        ICC1(aov(pros_T~id,c5)))
+        )
+
+icc.jomo
+#a very comparable ICC is found from joint modeling to the list-wise deletion
+
+```
+
+
+```{r}
+#fitting the final model from list-wise deletion to
+#the imputed datasets list and then pooling the results
+impList<-mitmlComplete(impjomo, print = "all") # the analysis in done on the list of 100 imputed sets and then pooling of results using rubin's rule
+fit.jomo<-with(impList, lmer(meanscore~case*Time*Female + pros +otdif + pros_T +(1|STIDnum)))
+testEstimates(fit.jomo, var.comp = TRUE)
+
+#the estimates are very similar to list-wise deletion from joint modeling imputation
+```
