@@ -1,0 +1,1267 @@
+---
+title: "Project 11"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+
+
+
+**OBJECTIVE - TO CALCULATE THE MEANSCORE FOR THE 8 ITEMS IN T1 AND TO APPLY LOGISTIC 
+REGRESSION ON THIS MEANSCORE TO FIND THE PREDICTORS FOR KNOW/DON'T KNOW BINARY OF 
+THIS MEANSCORE**
+
+```{r}
+project11<-read.csv("project11.csv",stringsAsFactors = FALSE,strip.white = TRUE,sep=",")
+T1<-subset(project11,select=c(STIDnum:RCT_GROUP,T1_EATHEAL:T1_BREA,Female,Grade,T1_pros,
+                              T1_otdif,T1_pros_T,T1_otdif_T))
+```
+
+Changing T1_EATHEAL to a factor, checking the levels of the factor, and then reordering in 
+the next code.
+
+```{r}
+T1$T1_EATHEAL<-ifelse(T1$T1_EATHEAL=="",NA,T1$T1_EATHEAL)
+T1$T1_EATHEAL<-as.factor(T1$T1_EATHEAL)
+levels(T1$T1_EATHEAL)
+```
+
+**Following code is for encoding 8 items T1_EATHEAL:T1_BREA and RCT_GROUP**
+
+1.The 8 items T1_EATHEAL:T1_BREA as numerics T1_EATHEAL_I:T1_BREA_I with the following encoding:
+
+- "Rarely or Never" = 0
+- "Less than once a week" = 1
+- "Once or twice a week" = 2
+- "Everyday or almost everyday" = 3
+- "Don't know" = 4
+-  NA = NA
+
+2. Adding new variable "RCT_GROUP_I" which is 0 for CASE and 1 for CONTROL.
+
+
+```{r}
+T1$T1_EATHEAL<-factor(T1$T1_EATHEAL,levels=levels(T1$T1_EATHEAL)[c(5,3,4,2,1)])
+T1$T1_EATHEAL_I<-as.numeric(T1$T1_EATHEAL)-1
+
+S<-subset(T1,select=c(T1_ART:T1_BREA))
+for(i in names(S)){
+  T1[[i]]<-ifelse(T1[[i]]=="",NA,T1[[i]])
+  T1[[i]]<-as.factor(T1[[i]])
+  T1[[i]]<-factor(T1[[i]],levels=levels(T1[[i]])[c(5,3,4,2,1)])
+  
+}
+T1$T1_ART_I<-as.numeric(T1$T1_ART)-1
+T1$T1_YOGA_I<-as.numeric(T1$T1_YOGA)-1
+T1$T1_RELAXA_I<-as.numeric(T1$T1_RELAXA)-1
+T1$T1_DANCING_I<-as.numeric(T1$T1_DANCING)-1
+T1$T1_MUSIC_I<-as.numeric(T1$T1_MUSIC)-1
+T1$T1_EXER_I<-as.numeric(T1$T1_EXER)-1
+T1$T1_BREA_I<-as.numeric(T1$T1_BREA)-1
+
+
+
+T1$CONTROL<-ifelse(T1$RCT_GROUP=="CASE",0,1)
+```
+
+
+**Following code finds the mean score for the 8 items and names the variable with mean score as T1_MEANSCORE** 
+
+the if part in the for loop sets the value of T1_MEANSCORE as "Don't know" when 
+any 1 item from the 8 items have "Don't know" as the response.
+
+
+the else part in the for loop sets the value of T1_MEANSCORE as the mean of the 
+available responses ignoring missing values and multiplies this value with 8.
+
+
+
+```{r}
+TT1<-subset(project11,select=c(T1_EATHEAL:T1_BREA))
+
+#1st outcome
+T1$T1_MEANSCORE1<-rep(0,2671)
+for (i in 1:2671){
+if(TT1$T1_EATHEAL[i]=="Don't know"|TT1$T1_ART[i]=="Don't know"|
+   TT1$T1_YOGA[i]=="Don't know"| TT1$T1_RELAXA[i]=="Don't know"|
+   TT1$T1_DANCING[i]=="Don't know"|TT1$T1_MUSIC[i]=="Don't know"|
+   TT1$T1_EXER[i]=="Don't know"|TT1$T1_BREA[i]=="Don't know"){
+  T1$T1_MEANSCORE1[i]<-"Don't know" }
+else{ 
+T1$T1_MEANSCORE1[i]=round(mean(c(T1$T1_EATHEAL_I[i],T1$T1_ART_I[i],
+            T1$T1_YOGA_I[i],T1$T1_RELAXA_I[i],T1$T1_DANCING_I[i],
+            T1$T1_MUSIC_I[i],T1$T1_EXER_I[i],T1$T1_BREA_I[i]),
+            na.rm=TRUE)*8,3)}
+}
+
+#2nd outcome taking don't know as missing
+
+  for(j in names(TT1)){
+    T1[[j]]<-ifelse(T1[[j]]=="Don't know",NA,T1[[j]])
+  }
+
+T1$T1_MEANSCORE2<-rep(0,2671)
+for(i in 1:2671){
+  T1$T1_MEANSCORE2[i]<-round(mean(c(T1$T1_EATHEAL_I[i],T1$T1_ART_I[i],
+            T1$T1_YOGA_I[i],T1$T1_RELAXA_I[i],T1$T1_DANCING_I[i],
+            T1$T1_MUSIC_I[i],T1$T1_EXER_I[i],T1$T1_BREA_I[i]),
+            na.rm=TRUE)*8,3)}
+
+#3rd outcome taking don't know as 0
+
+ for(j in names(TT1)){
+    T1[[j]]<-ifelse(T1[[j]]=="Don't know",NA,T1[[j]])
+  }
+
+
+head(subset(T1,select=c(T1_EATHEAL_I:T1_BREA_I,T1_MEANSCORE1)),10)
+
+```
+```{r}
+meanDK.T1<-T1$T1_MEANSCORE=="Don't know"
+length(T1$T1_MEANSCORE[meanDK.T1])
+meanNA.T1<-T1$T1_MEANSCORE=="NaN"
+length(T1$T1_MEANSCORE[meanNA.T1])
+
+```
+1. Number of "Don't know" values in the mean score is 361/2671 which is computed as:
+   
+   if any of the item in T1 (from the 8 items) is "Don't know" then the value in 
+   meanscore for that corresponding observation will be "Don't know".
+   
+2. Number of missing values in the mean score is 824/2671 which is computed as:
+
+   if all the items in T1 (all the 8 items) is missing then the value in the meanscore
+   for that corresponding observation will be missing(NaN).
+
+3. If a response is missing in the item (from the 8 items) then we take the mean of the
+   remaining observed responses.
+   
+4. The detailed mean score for all the 2671 observations is in the excel file "T1_meanscore".
+
+Now encoding the T1_MEANSCORE as a binary(T1_MS_binary) indicating whether the response is "known (1)" or
+Don't know "unknown(0)" (i.e "Don't know in any of the 8 items") and NA for missing value in T1_MEANSCORE.
+
+
+```{r}
+T1$T1_MS_binary<-ifelse(T1$T1_MEANSCORE=="Don't know",0,1)
+T1$T1_MS_binary<-ifelse(T1$T1_MEANSCORE=="NaN",NA,T1$T1_MS_binary)
+head(data.frame(T1$T1_MEANSCORE,T1$T1_MS_binary),10)
+```
+
+Checking correlations between pros, pros_T, otdif and otdif_T variables for T1.
+
+```{r}
+T1.reg<-subset(T1,select=c(STIDnum:RCT_GROUP,Female,Grade,T1_pros:T1_otdif_T,
+                           RCT_GROUP_I,T1_MS_binary))
+correl.T1<-subset(T1.reg,select=c(T1_pros:T1_otdif_T))
+correl.T1<-correl.T1[complete.cases(correl.T1),]
+cor(correl.T1)
+```
+
+Applying logistic regression to predict whether the response is known/Don't know based on predictors RCT_GROUP,Female,Grade and T1_pros,T1_otdif,T1_pros_T, T1_otdif_T.
+
+1. univariate analyis on T1_MS_binary using predictor "Female" :
+
+```{r}
+modelFemale.T1<-glm(T1_MS_binary~Female,data=T1.reg,family = binomial(link = logit))
+summary(modelFemale.T1)
+```
+Predictor "Female" is not significant.
+
+2. univariate analyis on T1_MS_binary using predictor "Grade" :
+
+```{r}
+modelGrade.T1<-glm(T1_MS_binary~Grade,data=T1.reg,family = binomial(link = logit))
+summary(modelGrade.T1)
+```
+Predictor "Grade" is weakly significant.
+
+3.  univariate analyis on T1_MS_binary using predictor "T1_pros" :
+
+```{r}
+modelT1_pros.T1<-glm(T1_MS_binary~T1_pros,data=T1.reg,family = binomial(link = logit))
+summary(modelT1_pros.T1)
+```
+Predictor "T1_pros" is not significant.
+
+4.  univariate analyis on T1_MS_binary using predictor "T1_otdif" :
+
+```{r}
+modelT1_otdif.T1<-glm(T1_MS_binary~T1_otdif,data=T1.reg,family = binomial(link = logit))
+summary(modelT1_otdif.T1)
+```
+Predictor "T1_otdif" is not significant.
+
+5.  univariate analyis on T1_MS_binary using predictor "T1_pros_T" :
+
+```{r}
+modelT1_pros_T.T1<-glm(T1_MS_binary~T1_pros_T,data=T1.reg,family = binomial(link = logit))
+summary(modelT1_pros_T.T1)
+```
+Predictor "T1_pros_T" is weakly significant.
+
+6.  univariate analyis on T1_MS_binary using predictor "T1_otdif_T" :
+
+```{r}
+modelT1_otdif_T.T1<-glm(T1_MS_binary~T1_otdif_T,data=T1.reg,
+                        family = binomial(link = logit))
+summary(modelT1_otdif_T.T1)
+```
+Predictor "T1_otdif_T" is highly significant.
+
+7. univariate analysis on T1_MS_binary using predictor "RCT_GROUP_I" :
+
+```{r}
+modelRCT_GROUP_I.T1<-glm(T1_MS_binary~RCT_GROUP_I,data=T1.reg,
+                         family = binomial(link = logit))
+summary(modelRCT_GROUP_I.T1)
+```
+Predictor "RCT_GROUP_I" is not significant.
+
+Applying logistic regression using predictors "Grade", "T1_otdif_T" and "T1_pros_T" as predictors
+for T1_MS_binary:
+
+```{r}
+model<-glm(T1_MS_binary~Grade+T1_otdif_T+T1_pros_T,data=T1.reg,
+           family =binomial(link=logit))
+summary(model)
+```
+
+
+Applying logistic regression using predictors "Grade" and "T1_otdif_T" as predictors for T1_MS_binary :
+
+```{r}
+modelT1<-glm(T1_MS_binary~Grade+T1_otdif_T,data = T1.reg,
+             family = binomial(link = logit))
+summary(modelT1)
+```
+
+1.Teachers rating for otdif = "T1_otdif_T" and  2."Grade" 
+
+of a student are significant predictors to predict whether the 
+student has answered "Don't know" in any of the 8 items for T1.  
+
+
+**OBJECTIVE - TO ANALYSE THE PATTERN OF "Don't know" from T1 to T2 (after intervention) AND IN THE
+  FOLLOW UP (T3)**
+
+```{r}
+T<-subset(project11,select = c(STIDnum:RCT_GROUP,T1_EATHEAL:T1_BREA,T2_EATHEAL:T2_BREA,
+                                  T3_EATHEAL:T3_BREA))
+
+```
+```{r}
+TT<-subset(T,select=c(T1_EATHEAL:T1_BREA,T2_EATHEAL:T2_BREA,T3_EATHEAL:T3_BREA))
+for (i in names(TT)){
+  T[[i]]<-ifelse(T[[i]]=="",NA,T[[i]])
+  T[[i]]<-as.factor(T[[i]])
+}
+```
+
+Encoding the 8 items in each timeperiod(T1,T2,T3) as binary indicating whether the response is Don't know/Know.
+
+```{r}
+for (i in names(TT)){
+  j<-paste(i,"I",sep="_")
+  T[[j]]<-ifelse((T[[i]]=="NA"),NA,"known")
+  T[[j]]<-ifelse((T[[i]]=="Don't know"),"Don't know",T[[j]])
+}
+```
+
+Analysing the pattern of "Don't know" for EATHEAL : 
+
+```{r}
+head(data.frame(T$T1_EATHEAL_I,T$T2_EATHEAL_I,T$T3_EATHEAL_I),10)
+```
+
+```{r}
+ftable(xtabs(~addNA(T1_EATHEAL_I)+addNA(T2_EATHEAL_I),data=T))
+ftable(xtabs(~addNA(T1_EATHEAL_I)+addNA(T2_EATHEAL_I)+addNA(T3_EATHEAL_I),data=T))
+```
+
+1. 74/112 students changed their response from "Don't know" to one of the known responses after intervention in T2,
+   45 of these students kept one of the known response, 6 of them responsed "Don't know" and remaining 23 didn't answer in the follow up(T3).
+
+2. 537/835 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   277 of these students kept one of the known response, 11 of them responded "Don't know" and the remaining 249 didn't answer(NA) in the follow up(T3).
+
+3. 53/1724 students changed their response from known to "Don't know" after intervention in T2 and 6 of these students kept their response as 
+   "Don't know", 25 of them responded with a known response and remaining 22 didn't answer(NA) in the follow up(T3). 
+
+
+Analysing the pattern of "Don't know" for ART :
+
+```{r}
+head(data.frame(T$T1_ART_I,T$T2_ART_I,T$T3_ART_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_ART_I)+addNA(T2_ART_I),data=T))
+
+ftable(xtabs(~addNA(T1_ART_I)+addNA(T2_ART_I)+addNA(T3_ART_I),data=T))
+```
+
+1. 45/66 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   29 of these students kept one of the known response, 3 of them responded "Don't know" and remaining 13 didn't answer(NA) in the follow up(T3).
+
+2. 560/847 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   292 of these students kept one of the known response, 12 of them responded "Don't know" and remaining 256 didn't answer(NA) in the follow up(T3).
+
+3. 45/1758 students changed their response from known to "Don't know" after intervention in T2 and only 5 of these students kept their response
+   as "Don't know", 25 of them responded with a known response and remaining 15 of them didn't answer(NA) in the follow up(T3). 
+   
+   
+
+
+Analysing the pattern of "Don't know" for YOGA :
+
+```{r}
+head(data.frame(T$T1_YOGA_I,T$T2_YOGA_I,T$T3_YOGA_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_YOGA_I)+addNA(T2_YOGA_I),data=T))
+ftable(xtabs(~addNA(T1_YOGA_I)+addNA(T2_YOGA_I)+addNA(T3_YOGA_I),data=T))
+```
+
+
+1. 26/40 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   20 of these students kept one of the known response, 1 of them responded "Don't know" and remaining 5 didn't answer(NA) in the follow up(T3).
+
+2. 565/850 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   300 of these students kept one of the known response, 6 of them responded "Don't know" and remaining 259 didn't answer(NA) in the follow up(T3).
+
+3. 22/1781 students changed their response from known to "Don't know" after intervention in T2 and only 4 of these students kept their response
+   as "Don't know", 12 of them responded with a known response and remaining 6 of them didn't answer(NA) in the follow up(T3). 
+
+
+Analysing the pattern of "Don't know" for RELAXA :
+
+```{r}
+head(data.frame(T$T1_RELAXA_I,T$T2_RELAXA_I,T$T3_RELAXA_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_RELAXA_I)+addNA(T2_RELAXA_I),data=T))
+ftable(xtabs(~addNA(T1_RELAXA_I)+addNA(T2_RELAXA_I)+addNA(T3_RELAXA_I),data=T))
+```
+
+1. 52/82 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   28 of these students kept one of the known response, no one of these responded "Don't know" and remaining 24 didn't answer(NA) in the follow up(T3).
+
+2. 555/870 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   298 of these students kept one of the known response, 7 of them responded "Don't know" and remaining 250 didn't answer(NA) in the follow up(T3).
+
+3. 35/1719 students changed their response from known to "Don't know" after intervention in T2 and only 3 of these students kept their response
+   as "Don't know", 27 of them responded with a known response and remaining 5 of them didn't answer(NA) in the follow up(T3). 
+
+
+Analysing the pattern of "Don't know" for DANCING :
+
+```{r}
+head(data.frame(T$T1_DANCING_I,T$T2_DANCING_I,T$T3_DANCING_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_DANCING_I)+addNA(T2_DANCING_I),data=T))
+ftable(xtabs(~addNA(T1_DANCING_I)+addNA(T2_DANCING_I)+addNA(T3_DANCING_I),data=T))
+```
+
+
+1. 28/44 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   20 of these students kept one of the known response, no one of these responded "Don't know" and remaining 8 didn't answer(NA) in the follow up(T3).
+
+2. 558/857 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   297 of these students kept one of the known response, 10 of them responded "Don't know" and remaining 251 didn't answer(NA) in the follow up(T3).
+
+3. 36/1770 students changed their response from known to "Don't know" after intervention in T2 and only 4 of these students kept their response
+   as "Don't know", 19 of them responded with a known response and remaining 13 of them didn't answer(NA) in the follow up(T3). 
+   
+   
+Analysing the pattern of "Don't know" for MUSIC :
+
+```{r}
+head(data.frame(T$T1_MUSIC_I,T$T2_MUSIC_I,T$T3_MUSIC_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_MUSIC_I)+addNA(T2_MUSIC_I),data=T))
+ftable(xtabs(~addNA(T1_MUSIC_I)+addNA(T2_MUSIC_I)+addNA(T3_MUSIC_I),data=T))
+```
+  
+1. 46/74 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   29 of these students kept one of the known response, 5 of these responded "Don't know" and remaining 12 didn't answer(NA) in the follow up(T3).
+
+2. 561/854 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   294 of these students kept one of the known response, 15 of them responded "Don't know" and remaining 252 didn't answer(NA) in the follow up(T3).
+
+3. 50/1743 students changed their response from known to "Don't know" after intervention in T2 and only 3 of these students kept their response
+   as "Don't know", 27 of them responded with a known response and remaining 20 of them didn't answer(NA) in the follow up(T3). 
+  
+
+Analysing the pattern of "Don't know" for EXER :
+
+```{r}
+head(data.frame(T$T1_EXER_I,T$T2_EXER_I,T$T3_EXER_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_EXER_I)+addNA(T2_EXER_I),data=T))
+ftable(xtabs(~addNA(T1_EXER_I)+addNA(T2_EXER_I)+addNA(T3_EXER_I),data=T))
+```
+    
+1. 60/92 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   41 of these students kept one of the known response, 1 of these responded "Don't know" and remaining 18 didn't answer(NA) in the follow up(T3).
+
+2. 550/862 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   288 of these students kept one of the known response, 13 of them responded "Don't know" and remaining 249 didn't answer(NA) in the follow up(T3).
+
+3. 44/1717 students changed their response from known to "Don't know" after intervention in T2 and only 5 of these students kept their response
+   as "Don't know", 20 of them responded with a known response and remaining 19 of them didn't answer(NA) in the follow up(T3). 
+   
+
+Analysing the pattern of "Don't know" for BREA :
+
+```{r}
+head(data.frame(T$T1_BREA_I,T$T2_BREA_I,T$T3_BREA_I),10)
+```
+
+
+```{r}
+ftable(xtabs(~addNA(T1_BREA_I)+addNA(T2_BREA_I),data=T))
+ftable(xtabs(~addNA(T1_BREA_I)+addNA(T2_BREA_I)+addNA(T3_BREA_I),data=T))
+```
+   
+1. 62/94 students changed their response from "Don't know" to one of the known responses after intervention in T2, 
+   35 of these students kept one of the known response, 4 of these responded "Don't know" and remaining 23 didn't answer(NA) in the follow up(T3).
+
+2. 541/845 students changed their response from didn't answer(NA) to one of the known responses after intervention in T2,
+   285 of these students kept one of the known response, 10 of them responded "Don't know" and remaining 246 didn't answer(NA) in the follow up(T3).
+
+3. 53/1732 students changed their response from known to "Don't know" after intervention in T2 and only 6 of these students kept their response
+   as "Don't know", 29 of them responded with a known response and remaining 18 of them didn't answer(NA) in the follow up(T3).
+   
+   
+   
+**OBJECTIVE - TO CALCULATE THE MEANSCORE FOR THE 8 ITEMS IN T2 AND TO APPLY LOGISTIC 
+REGRESSION ON THIS MEANSCORE TO FIND THE PREDICTORS FOR KNOW/DON'T KNOW BINARY OF 
+THIS MEANSCORE**
+
+```{r}
+T2<-subset(project11,select=c(STIDnum:RCT_GROUP,T2_EATHEAL:T2_BREA,Female,
+                              Grade,T2_pros,T2_otdif,T2_pros_T,T2_otdif_T))
+
+```
+
+Checking the Levels of factor T2_EATHEAL, and then reordering in 
+the next code.
+
+```{r}
+T2$T2_EATHEAL<-ifelse(T2$T2_EATHEAL=="",NA,T2$T2_EATHEAL)
+T2$T2_EATHEAL<-as.factor(T2$T2_EATHEAL)
+levels(T2$T2_EATHEAL)
+```
+
+**Following code is for encoding 8 items T2_EATHEAL:T2_BREA and RCT_GROUP**
+
+1.The 8 items T2_EATHEAL:T2_BREA as numerics T2_EATHEAL_I:T2_BREA_I with the following encoding:
+
+- "Rarely or Never" = 0
+- "Less than once a week" = 1
+- "Once or twice a week" = 2
+- "Everyday or almost everyday" = 3
+- "Don't know" = 4
+-  NA = NA
+
+2. Adding new variable "RCT_GROUP_I" as 0 for CASE and 1 for CONTROL.
+
+
+```{r}
+T2$T2_EATHEAL<-factor(T2$T2_EATHEAL,levels=levels(T2$T2_EATHEAL)[c(5,3,4,2,1)])
+T2$T2_EATHEAL_I<-as.numeric(T2$T2_EATHEAL)-1
+
+SS<-subset(T2,select=c(T2_ART:T2_BREA))
+for(i in names(SS)){
+  T2[[i]]<-ifelse(T2[[i]]=="",NA,T2[[i]])
+  T2[[i]]<-as.factor(T2[[i]])
+  T2[[i]]<-factor(T2[[i]],levels=levels(T2[[i]])[c(5,3,4,2,1)])
+  
+}
+T2$T2_ART_I<-as.numeric(T2$T2_ART)-1
+T2$T2_YOGA_I<-as.numeric(T2$T2_YOGA)-1
+T2$T2_RELAXA_I<-as.numeric(T2$T2_RELAXA)-1
+T2$T2_DANCING_I<-as.numeric(T2$T2_DANCING)-1
+T2$T2_MUSIC_I<-as.numeric(T2$T2_MUSIC)-1
+T2$T2_EXER_I<-as.numeric(T2$T2_EXER)-1
+T2$T2_BREA_I<-as.numeric(T2$T2_BREA)-1
+
+
+
+T2$RCT_GROUP_I<-ifelse(T2$RCT_GROUP=="CASE",0,1)
+```
+
+
+**Following code finds the mean score for the 8 items and names the variable with mean score as
+T2_MEANSCORE with initial values 0** 
+
+the if part in the for loop sets the value of T2_MEANSCORE as "Don't know" when 
+any 1 item from the 8 items have "Don't know" as the response.
+
+
+the else part in the for loop sets the value of T2_MEANSCORE as the mean of the 
+available responses ignoring missing values and multiplies this value with 8.
+
+
+
+```{r}
+TT2<-subset(project11,select=c(T2_EATHEAL:T2_BREA))
+T2$T2_MEANSCORE<-rep(0,2671)
+for (i in 1:2671){
+  if(TT2$T2_EATHEAL[i]=="Don't know" | TT2$T2_ART[i]=="Don't know" 
+     |TT2$T2_YOGA[i]=="Don't know"|TT2$T2_RELAXA[i]=="Don't know"|
+  TT2$T2_DANCING[i]=="Don't know"|TT2$T2_MUSIC[i]=="Don't know" |
+  TT2$T2_EXER[i]=="Don't know"|TT2$T2_BREA[i]=="Don't know"){
+    T2$T2_MEANSCORE[i]<-"Don't know"
+  }
+  else{
+  T2$T2_MEANSCORE[i]=round(mean(c(T2$T2_EATHEAL_I[i],T2$T2_ART_I[i],
+                                  T2$T2_YOGA_I[i],T2$T2_RELAXA_I[i],
+                             T2$T2_DANCING_I[i],T2$T2_MUSIC_I[i],T2$T2_EXER_I[i],
+                             T2$T2_BREA_I[i]),na.rm=TRUE)*8,3)}
+  }
+
+head(subset(T2,select=c(T2_EATHEAL_I:T2_BREA_I,T2_MEANSCORE)),10)
+```
+```{r}
+meanDK.T2<-T2$T2_MEANSCORE=="Don't know"
+length(T2$T2_MEANSCORE[meanDK.T2])
+meanNA.T2<-T2$T2_MEANSCORE=="NaN"
+length(T2$T2_MEANSCORE[meanNA.T2])
+
+```
+1. Number of "Don't know" values in the mean score is 310/2671 which is computed as:
+   
+   if any of the item in T2 (from the 8 items) is "Don't know" then the value in 
+   meanscore for that corresponding observation will be "Don't know".
+   
+2. Number of missing values in the mean score is 748/2671 which is computed as:
+
+   if all the items in T2 (all the 8 items) is missing then the value in the meanscore
+   for that corresponding observation will be missing(NaN).
+
+3. If a response is missing in the item (from the 8 items) then we take the mean of the
+   remaining observed responses.
+   
+4. The detailed mean score for all the 2671 observations is in the excel file "T2_meanscore".
+
+Now encoding the T2_MEANSCORE as a binary indicating whether the response is "known (1)" or
+Don't know "unknown(0)" (i.e "Don't know in any of the 8 items") and NA for missing value in T2_MEANSCORE.
+
+
+```{r}
+T2$T2_MS_binary<-ifelse(T2$T2_MEANSCORE=="Don't know",0,1)
+T2$T2_MS_binary<-ifelse(T2$T2_MEANSCORE=="NaN",NA,T2$T2_MS_binary)
+head(data.frame(T2$T2_MEANSCORE,T2$T2_MS_binary),10)
+```
+
+Checking correlations between pros, pros_T, otdif and otdif_T variables for T2.
+
+```{r}
+T2.reg<-subset(T2,select=c(STIDnum:RCT_GROUP,Female,Grade,T2_pros:T2_otdif_T,
+                           RCT_GROUP_I,T2_MS_binary))
+correl.T2<-subset(T2.reg,select=c(T2_pros:T2_otdif_T))
+correl.T2<-correl.T2[complete.cases(correl.T2),]
+cor(correl.T2)
+```
+
+Applying logistic regression to predict whether the response is known/Don't know based on predictors
+RCT_GROUP,Female,Grade and T2_pros,T2_otdif,T2_pros_T, T2_otdif_T.
+
+1. univariate analyis on T2_MS_binary using predictor "Female" :
+
+```{r}
+modelFemale.T2<-glm(T2_MS_binary~Female,data=T2.reg,family = binomial(link = logit))
+summary(modelFemale.T2)
+```
+
+Predictor "Female" is not significant.
+
+2. univariate analyis on T2_MS_binary using predictor "Grade" :
+
+```{r}
+modelGrade.T2<-glm(T2_MS_binary~Grade,data=T2.reg,family = binomial(link = logit))
+summary(modelGrade.T2)
+
+```
+Predictor "Grade" is not significant.
+
+3.  univariate analyis on T2_MS_binary using predictor "T2_pros" :
+
+```{r}
+modelT2_pros.T2<-glm(T2_MS_binary~T2_pros,data=T2.reg,family = binomial(link = logit))
+summary(modelT2_pros.T2)
+```
+Predictor "T2_pros" is not significant.
+
+4.  univariate analyis on T2_MS_binary using predictor "T2_otdif" :
+
+```{r}
+modelT2_otdif.T2<-glm(T2_MS_binary~T2_otdif,data=T2.reg,family = binomial(link = logit))
+summary(modelT2_otdif.T2)
+```
+Predictor "T2_otdif" is not significant.
+
+5.  univariate analyis on T2_MS_binary using predictor "T2_pros_T" :
+
+```{r}
+modelT2_pros_T.T2<-glm(T2_MS_binary~T2_pros_T,data=T2.reg,family = binomial(link = logit))
+summary(modelT2_pros_T.T2)
+```
+Predictor "T2_pros_T" is weakly significant.
+
+6.  univariate analyis on T2_MS_binary using predictor "T2_otdif_T" :
+
+```{r}
+modelT2_otdif_T.T2<-glm(T2_MS_binary~T2_otdif_T,data=T2.reg,family = binomial(link = logit))
+summary(modelT2_otdif_T.T2)
+```
+Predictor "T2_otdif_T" is highly significant.
+
+7. univariate analyis on T2_MS_binary using predictor "RCT_GROUP_I" :
+
+```{r}
+modeLRCT_GROUP_I.T2<-glm(T2_MS_binary~RCT_GROUP_I,data=T2.reg,family = binomial(link = logit))
+summary(modeLRCT_GROUP_I.T2)
+```
+Predictor "RCT_GROUP_I" is not significant.
+
+Applying logistic regression using predictors "T2_pros_T" and "T2_otdif_T" as predictors for T2_MS_binary :
+
+```{r}
+modelT2<-glm(T2_MS_binary~T2_pros_T+T2_otdif_T,data = T2.reg,family = binomial(link = logit))
+summary(modelT2)
+```
+The model with predictor as "T2_otdif_T" only has lowest AIC value and "T2_pros_T"
+is not significant along with "T2_otdif_T" therefore 
+
+The teachers rating = "T2_otdif_T" is a highly significant predictor to predict whether the 
+student has answered "Don't know" in any of the 8 items in T2.  
+(An important analogy here is that "T1_otdif_T" was the only highly significant predictor 
+to predict T1_MS_binary for T1)
+
+**OBJECTIVE - TO CALCULATE THE MEANSCORE FOR THE 8 ITEMS IN T3 AND TO APPLY LOGISTIC 
+REGRESSION ON THIS MEANSCORE TO FIND THE PREDICTORS FOR KNOW/DON'T KNOW BINARY OF 
+THIS MEANSCORE**
+
+```{r}
+T3<-subset(project11,select=c(STIDnum:RCT_GROUP,T3_EATHEAL:T3_BREA,Female,
+                              Grade,T3_pros,T3_otdif,T3_pros_T,T3_otdif_T))
+
+```
+
+Checking the Levels of factor T3_EATHEAL, and then reordering in 
+the next code.
+
+```{r}
+T3$T3_EATHEAL<-ifelse(T3$T3_EATHEAL=="",NA,T3$T3_EATHEAL)
+T3$T3_EATHEAL<-as.factor(T3$T3_EATHEAL)
+levels(T3$T3_EATHEAL)
+```
+
+**Following code is for encoding 8 items T3_EATHEAL:T3_BREA and RCT_GROUP**
+
+1.The 8 items T3_EATHEAL:T3_BREA as numerics T3_EATHEAL_I:T3_BREA_I with the following encoding:
+
+- "Rarely or Never" = 0
+- "Less than once a week" = 1
+- "Once or twice a week" = 2
+- "Everyday or almost everyday" = 3
+- "Don't know" = 4
+-  NA = NA
+
+2. Adding variable "RCT_GROUP_I" as 0 for CASE and 1 for CONTROL.
+
+
+```{r}
+T3$T3_EATHEAL<-factor(T3$T3_EATHEAL,levels=levels(T3$T3_EATHEAL)[c(5,3,4,2,1)])
+T3$T3_EATHEAL_I<-as.numeric(T3$T3_EATHEAL)-1
+
+SSS<-subset(T3,select=c(T3_ART:T3_BREA))
+for(i in names(SSS)){
+  T3[[i]]<-ifelse(T3[[i]]=="",NA,T3[[i]])
+  T3[[i]]<-as.factor(T3[[i]])
+  T3[[i]]<-factor(T3[[i]],levels=levels(T3[[i]])[c(5,3,4,2,1)])
+  
+}
+T3$T3_ART_I<-as.numeric(T3$T3_ART)-1
+T3$T3_YOGA_I<-as.numeric(T3$T3_YOGA)-1
+T3$T3_RELAXA_I<-as.numeric(T3$T3_RELAXA)-1
+T3$T3_DANCING_I<-as.numeric(T3$T3_DANCING)-1
+T3$T3_MUSIC_I<-as.numeric(T3$T3_MUSIC)-1
+T3$T3_EXER_I<-as.numeric(T3$T3_EXER)-1
+T3$T3_BREA_I<-as.numeric(T3$T3_BREA)-1
+
+
+
+T3$RCT_GROUP_I<-ifelse(T3$RCT_GROUP=="CASE",0,1)
+```
+
+
+**Following code finds the mean score for the 8 items and names the variable with mean score as
+T3_MEANSCORE with initial values 0** 
+
+the if part in the for loop sets the value of T3_MEANSCORE as "Don't know" when 
+any 1 item from the 8 items have "Don't know" as the response.
+
+
+the else part in the for loop sets the value of T3_MEANSCORE as the mean of the 
+available responses ignoring missing values and multiplies this value with 8.
+
+
+
+```{r}
+TT3<-subset(project11,select=c(T3_EATHEAL:T3_BREA))
+T3$T3_MEANSCORE<-rep(0,2671)
+for (i in 1:2671){
+  if(TT3$T3_EATHEAL[i]=="Don't know" | TT3$T3_ART[i]=="Don't know" |
+     TT3$T3_YOGA[i]=="Don't know"|TT3$T3_RELAXA[i]=="Don't know"|
+  TT3$T3_DANCING[i]=="Don't know"|TT3$T3_MUSIC[i]=="Don't know" |
+  TT3$T3_EXER[i]=="Don't know"|TT3$T3_BREA[i]=="Don't know"){
+    T3$T3_MEANSCORE[i]<-"Don't know"
+  }
+  else{
+  T3$T3_MEANSCORE[i]=round(mean(c(T3$T3_EATHEAL_I[i],T3$T3_ART_I[i],T3$T3_YOGA_I[i],
+                                  T3$T3_RELAXA_I[i],T3$T3_DANCING_I[i],
+                                  T3$T3_MUSIC_I[i],T3$T3_EXER_I[i],T3$T3_BREA_I[i]),
+                                  na.rm=TRUE)*8,3)}
+  }
+
+head(subset(T3,select=c(T3_EATHEAL_I:T3_BREA_I,T3_MEANSCORE)),10)
+```
+```{r}
+meanDK.T3<-T3$T3_MEANSCORE=="Don't know"
+length(T3$T3_MEANSCORE[meanDK.T3])
+meanNA.T3<-T3$T3_MEANSCORE=="NaN"
+length(T3$T3_MEANSCORE[meanNA.T3])
+
+```
+1. Number of "Don't know" values in the mean score is 213/2671 which is computed as:
+   
+   if any of the item in T3 (from the 8 items) is "Don't know" then the value in 
+   meanscore for that corresponding observation will be "Don't know".
+   
+2. Number of missing values in the mean score is 1304/2671 which is computed as:
+
+   if all the items in T3 (all the 8 items) is missing then the value in the meanscore
+   for that corresponding observation will be missing(NaN).
+
+3. If a response is missing in the item (from the 8 items) then we take the mean of the
+   remaining observed responses.
+   
+4. The detailed mean score for all the 2671 observations is in the excel file "T3_meanscore".
+
+Now encoding the T3_MEANSCORE as a binary indicating whether the response is "known (1)" or
+Don't know "unknown(0)" (i.e "Don't know in any of the 8 items") and NA for missing value in T3_MEANSCORE.
+
+
+```{r}
+T3$T3_MS_binary<-ifelse(T3$T3_MEANSCORE=="Don't know",0,1)
+T3$T3_MS_binary<-ifelse(T3$T3_MEANSCORE=="NaN",NA,T3$T3_MS_binary)
+head(data.frame(T3$T3_MEANSCORE,T3$T3_MS_binary),10)
+```
+
+Checking correlations between pros, pros_T, otdif and otdif_T variables for T3.
+
+```{r}
+T3.reg<-subset(T3,select=c(STIDnum:RCT_GROUP,Female,Grade,T3_pros:T3_otdif_T,
+                           RCT_GROUP_I,T3_MS_binary))
+correl.T3<-subset(T3.reg,select=c(T3_pros:T3_otdif_T))
+correl.T3<-correl.T3[complete.cases(correl.T3),]
+cor(correl.T3)
+```
+
+Applying logistic regression to predict whether the response is known/Don't know based on predictors
+RCT_GROUP,Female,Grade and T3_pros,T3_otdif,T3_pros_T, T3_otdif_T.
+
+1. univariate analyis on T3_MS_binary using predictor "Female" :
+
+```{r}
+modelFemale.T3<-glm(T3_MS_binary~Female,data=T3.reg,family = binomial(link = logit))
+summary(modelFemale.T3)
+```
+
+Predictor "Female" is not significant.
+
+2. univariate analyis on T3_MS_binary using predictor "Grade" :
+
+```{r}
+modelGrade.T3<-glm(T3_MS_binary~Grade,data=T3.reg,family = binomial(link = logit))
+summary(modelGrade.T3)
+```
+Predictor "Grade" is highly significant.
+
+3.  univariate analyis on T3_MS_binary using predictor "T3_pros" :
+
+```{r}
+modelT3_pros.T3<-glm(T3_MS_binary~T3_pros,data=T3.reg,family = binomial(link = logit))
+summary(modelT3_pros.T3)
+```
+Predictor "T3_pros" is not significant.
+
+4.  univariate analyis on T3_MS_binary using predictor "T3_otdif" :
+
+```{r}
+modelT3_otdif.T3<-glm(T3_MS_binary~T3_otdif,data=T3.reg,family = binomial(link = logit))
+summary(modelT3_otdif.T3)
+```
+Predictor "T3_otdif" is not significant.
+
+5.  univariate analyis on T3_MS_binary using predictor "T3_pros_T" :
+
+```{r}
+modelT3_pros_T.T3<-glm(T3_MS_binary~T3_pros_T,data=T3.reg,family = binomial(link = logit))
+summary(modelT3_pros_T.T3)
+```
+Predictor "T3_pros_T" is not significant.
+
+6.  univariate analyis on T3_MS_binary using predictor "T3_otdif_T" :
+
+```{r}
+modelT3_otdif_T.T3<-glm(T3_MS_binary~T3_otdif_T,data=T3.reg,family = binomial(link = logit))
+summary(modelT3_otdif_T.T3)
+```
+Predictor "T3_otdif_T" is not significant.
+
+7. univariate analysis on T3_MS_binary using predictor "RCT_GROUP_I" :
+
+```{r}
+modelRCT_GROUP_I.T3<-glm(T3_MS_binary~RCT_GROUP_I,data=T3.reg,family = binomial(link = logit))
+summary(modelRCT_GROUP_I.T3)
+```
+Predictor "RCT_GROUP_I" is not significant.
+
+Applying logistic regression using "Grade" as predictors for T3_MS_binary :
+
+```{r}
+modelT3<-glm(T3_MS_binary~Grade,data = T3.reg,family = binomial(link = logit))
+summary(modelT3)
+```
+Predictor "Grade" is highly significant.
+
+The "Grade" of a student is a highly significant predictor to predict whether the 
+student has answered "Don't know" in any of the 8 items  T3.  
+(An important analogy here is that "Grade" was the 2nd significant predictor (after "T1_otdif_T") 
+to predict T1_MS_binary for T1)
+
+
+**RESULTS**
+
+1. "T1_otdif_T" and "Grade" were significant predictors for T1_MS_binary, with
+   "T1_otdif_T" being highly significant and "Grade" being weakly significant.
+
+2. "T2_otdif_T" was highly significant predictor for T2_MS_binary.
+
+3. "Grade" was highly significant predictor for T3_MS_binary. 
+
+NOTE : here MS_binary variables are binary variables indicating whether the 
+       mean score for the 8 items in T1,T2 and T3 are known/Don't know. And 
+       mean score is calculated as the (mean of the 8 responses)*8 where if 
+       the response is "Don't know" in any of the 8 items them the mean score is
+       "Don't know".
+
+
+**OBJECTIVE - ANALYSING THE PATTERN OF DON'T KNOW IN THE MEAN SCORE FOR T1,T2 AND T3**
+
+
+```{r}
+ms<-data.frame(T1$T1_MEANSCORE,T2$T2_MEANSCORE,T3$T3_MEANSCORE,subset(T,select = c(STIDnum:RCT_GROUP)))
+str(ms)
+```
+
+```{r}
+for (i in c("T1.T1_MEANSCORE","T2.T2_MEANSCORE","T3.T3_MEANSCORE")){
+  j<-paste(i,"I",sep="_")
+  ms[[j]]<-ifelse((ms[[i]]=="NaN"),NA,"known")
+  ms[[j]]<-ifelse((ms[[i]]=="Don't know"),"Don't know",ms[[j]])
+}
+str(ms)
+```
+```{r}
+ftable(xtabs(~addNA(T1.T1_MEANSCORE_I)+addNA(T2.T2_MEANSCORE_I),data =ms))
+ftable(xtabs(~addNA(T1.T1_MEANSCORE_I)+addNA(T2.T2_MEANSCORE_I)+
+               addNA(T3.T3_MEANSCORE_I),data = ms))
+```
+
+1. 189/361 students had no "Don't know" response in any of the 8 items after intervention (in T2) 
+   where these 361 students had "Don't know" response in some of the 8 items in T1. Out of these
+   189, 111 students had no "Don't know" response, 24 had "Don't know" response in atleast one 
+   of the 8 items and remaining 54 didn't answer any of the 8 items in the follow up(T3).
+   
+2. 472/824 students had no "Don't know" response in any of the 8 items after intervention (in T2)
+   where these 824 students didn't answer any of the 8 items in T1. Out of these 472, 222 students 
+   had no "Don't know"response, 34 had "Don't know" response in atleast one of the 8 items and 
+   remaining 216 didn't answer any of the 8 items in the follow up(T3).
+   
+3. 134/1486 students had "Don't know" response in atleast one of the 8 items after intervention (in T2)
+   where these 1486 students had answered all the 8 items in T1 without "Don't know" values. Out of these
+   134, 74 students had no "Don't know" response, 17 had "Don't know" response in atleast one of the 8 items
+   and remaining 43 didn't answer any of the 8 items in the follow up(T3).
+   
+   
+**INFERENCES**
+
+1. There is a significant reduction in the number of "Don't know" responses after the intervention(in T2).
+
+2. The number of missing values increases in the follow up (T3) with ~ 50% students (1304/2671) not answering any
+   of the 8 items in T3.
+   
+   
+**TESTING WHETHER THE AVERAGE MEANSCORE IN T1,T2 AND T3 ARE EQUAL WRT GROUPS - FEMALE, GRADE AND RCT_GROUP**
+
+Encoding the "Don't know" response in MEANSCORE as
+missing (NA) and converting the MEANSCORE to a numeric continuous variable.
+
+```{r}
+str(T1$T1_MEANSCORE)
+str(T2$T2_MEANSCORE)
+str(T3$T3_MEANSCORE)
+T1.ms<-T1$T1_MEANSCORE
+T2.ms<-T2$T2_MEANSCORE
+T3.ms<-T3$T3_MEANSCORE
+test<-data.frame(T1.ms,T2.ms,T3.ms,
+                 subset(T1,select = c(Grade,Female,RCT_GROUP)))
+test$T1.ms<-as.character(test$T1.ms)
+test$T2.ms<-as.character(test$T2.ms)
+test$T3.ms<-as.character(test$T3.ms)
+for(i in c("T1.ms","T2.ms","T3.ms")){
+test[[i]]<-ifelse(test[[i]]=="Don't know",
+       NA,test[[i]])
+test[[i]]<-ifelse(test[[i]]=="NaN",NA,test[[i]])}
+test$T1.ms<-as.numeric(test$T1.ms)
+test$T2.ms<-as.numeric(test$T2.ms)
+test$T3.ms<-as.numeric(test$T3.ms)
+str(test)
+```
+```{r}
+library(rcompanion)
+hist(test$T1.ms,xlab="Mean Score for T1",main="")
+plotDensityHistogram(test$T1.ms,adjust=1)
+```
+
+
+The Meanscore for T1 is almost normally distributed. We can apply t-test to check whether the average of this Meanscore for T1 is equal for
+
+- Male and Female (Variable "Female")
+- Grade 7 & 8 (Variable "Grade")
+- CASES and CONTROL (Variable "RCT_GROUP")
+
+```{r}
+hist(test$T2.ms,xlab = "Mean Score for T2",main="")
+plotDensityHistogram(test$T2.ms,adjust=1)
+```
+
+```{r}
+hist(test$T3.ms,xlab = "Mean Score for T3",main="")
+plotDensityHistogram(test$T3.ms,adjust=1)
+```
+Similarly we can apply t-tests for Meanscores of
+T2 and T3 also as it is approximately normally distributed.
+
+**t-test for Female**
+
+**T1**
+
+```{r}
+t.test(T1.ms~Female,data=test)
+```
+
+```{r}
+boxplot(T1.ms~Female,data=test,names=c("Male","Female"),
+        ylab="Mean Score for T1")
+```
+We can see from the t-test that the p value is significant 
+and the average of the meanscore for T1 is not equal for Male
+and Female
+
+**T2**
+
+```{r}
+t.test(T2.ms~Female,data=test)
+```
+
+```{r}
+boxplot(T2.ms~Female,data=test,names=c("Male","Female"),
+        ylab="Mean Score for T2")
+```
+
+We can see from the t-test that the p value is significant 
+and the average of the meanscore for T2 is not equal for Male
+and Female
+
+**T3**
+
+```{r}
+t.test(T3.ms~Female,data=test)
+```
+
+```{r}
+boxplot(T3.ms~Female,data=test,names=c("Male","Female"),
+        ylab="Mean Score for T3")
+```
+
+We can see from the t-test that the p value is significant 
+and the average of the meanscore for T3 is not equal for Male
+and Female
+
+
+**t-test for Grade**
+
+**T1**
+
+```{r}
+t.test(T1.ms~Grade,data=test)
+```
+
+p value is not significant. Average of the meanscore for T1
+is equal for Grade 7 and 8.
+
+**T2**
+
+```{r}
+t.test(T2.ms~Grade,data=test)
+```
+p value is not significant. Average of the meanscore for T2
+is equal for Grade 7 and 8.
+
+```{r}
+t.test(T3.ms~Grade,data=test)
+```
+
+p value is not significant. Average of the meanscore for T3
+is equal for Grade 7 and 8.
+
+**t-test for RCT_GROUP**
+
+**T1**
+
+```{r}
+t.test(T1.ms~RCT_GROUP,data=test)
+```
+
+p value is not significant.Average of the meanscore for T1
+is equal for both CASE and CONTROL
+
+**T2**
+
+```{r}
+t.test(T2.ms~RCT_GROUP,data=test)
+```
+
+p value is not significant.Average of the meanscore for T2
+is equal for both CASE and CONTROL
+
+```{r}
+t.test(T3.ms~RCT_GROUP,data=test)
+```
+
+p value is not significant.Average of the meanscore for T3
+is equal for both CASE and CONTROL
+
+
+**TWO WAY ANOVA**
+
+**T1**
+
+```{r}
+anova(lm(T1.ms~Female+Grade+RCT_GROUP,data=test))
+```
+
+**T2**
+
+```{r}
+anova(lm(T2.ms~Female+Grade+RCT_GROUP,data=test))
+```
+
+**T3**
+
+```{r}
+anova(lm(T3.ms~Female+Grade+RCT_GROUP,data=test))
+```
+
+The average of the meanscore is unequal for Male and Female
+for T1,T2 and T3.
+
+
+
+**Comparing the average of meanscore for T1,T2 and T3**
+
+```{r}
+colnames(test)
+```
+
+
+
+```{r}
+colnames(test)[1]<-"T1"
+colnames(test)[2]<-"T2"
+colnames(test)[3]<-"T3"
+```
+
+```{r}
+library(tidyverse)
+test1<-test%>%gather(Time,MeanScore,T1:T3)
+str(test1)
+```
+
+
+```{r}
+test1%>%group_by(Time)%>%summarise(count=n(),mean=mean(MeanScore,na.rm=TRUE),
+                                   sd=sd(MeanScore,na.rm=TRUE))
+```
+
+```{r}
+library(ggpubr)
+ggboxplot(test1,x="Time",y="MeanScore",
+        color="Time",palette = c("#00AFBB", 
+                                 "#E7B800", "#FF0000"),
+        order=c("T1","T2","T3"),ylab="MeanScore",xlab="Time")
+```
+
+the average of meanscore of available responses(after encoding "Don't know" as NA)
+is almost the same for T1,T2 and T3.
+
+```{r}
+T1.num.ms<-ifelse(T1$T1_MEANSCORE=="Don't know",NA,T1$T1_MEANSCORE)
+T2.num.ms<-ifelse(T2$T2_MEANSCORE=="Don't know",NA,T2$T2_MEANSCORE)
+T1.num.ms<-ifelse(T1$T1_MEANSCORE=="NaN",NA,T1.num.ms)
+T2.num.ms<-ifelse(T2$T2_MEANSCORE=="NaN",NA,T2.num.ms)
+T3.num.ms<-ifelse(T3$T3_MEANSCORE=="Don't know",NA,T3$T3_MEANSCORE)
+T3.num.ms<-ifelse(T3$T3_MEANSCORE=="NaN",NA,T3.num.ms)
+T1$T1.num.ms<-T1.num.ms
+T2$T2.num.ms<-T2.num.ms
+T3$T3.num.ms<-T3.num.ms
+T1$T1.num.ms<-as.numeric(T1$T1.num.ms)
+T2$T2.num.ms<-as.numeric(T2$T2.num.ms)
+T3$T3.num.ms<-as.numeric(T3$T3.num.ms)
+
+```
+
+```{r}
+T1%>%filter(!is.na(Grade))%>%group_by(Grade)%>%summarise(count=n(),
+          mean=mean(T1.num.ms,na.rm=TRUE),sd=sd(T1.num.ms,na.rm=TRUE))
+```
+```{r}
+T2%>%filter(!is.na(Grade))%>%group_by(Grade)%>%summarise(count=n(),
+        mean=mean(T2.num.ms,na.rm=TRUE),sd=sd(T2.num.ms,na.rm=TRUE))
+```
+```{r}
+T3%>%filter(!is.na(Grade))%>%group_by(Grade)%>%summarise(count=n(),
+          mean=mean(T3.num.ms,na.rm=TRUE),sd=sd(T3.num.ms,na.rm=TRUE))
+```
+```{r}
+T1%>%group_by(RCT_GROUP)%>%summarise(count=n(),
+  mean=mean(T1.num.ms,na.rm=TRUE),sd=sd(T1.num.ms,na.rm=TRUE))
+```
+
+```{r}
+T2%>%group_by(RCT_GROUP)%>%summarise(count=n(),
+        mean=mean(T2.num.ms,na.rm=TRUE),sd=sd(T2.num.ms,na.rm=TRUE))
+```
+
+```{r}
+T3%>%group_by(RCT_GROUP)%>%summarise(count=n(),
+    mean=mean(T3.num.ms,na.rm=TRUE),sd=sd(T3.num.ms,na.rm=TRUE))
+```
+
+```{r}
+T1%>%filter(!is.na(Female))%>%group_by(Female)%>%summarise(count=n(),
+  mean=mean(T1.num.ms,na.rm=TRUE),sd=sd(T1.num.ms,na.rm=TRUE))
+```
+
+```{r}
+T2%>%filter(!is.na(Female))%>%group_by(Female)%>%summarise(count=n(),
+  mean=mean(T2.num.ms,na.rm=TRUE),sd=sd(T2.num.ms,na.rm=TRUE))
+```
+```{r}
+T3%>%filter(!is.na(Female))%>%group_by(Female)%>%summarise(count=n(),
+  mean=mean(T3.num.ms,na.rm=TRUE),sd=sd(T3.num.ms,na.rm=TRUE))
+```
+
+The mean of the meanscore is almost same for Grades 7 & 8
+and Cohort "Case" and "Control" but is better for Female students 
+compared to Male students for  T1,T2 and T3 after taking
+"Don't know" as NA.
+
+```{r}
+d<-cbind("T1" = T1$T1_MEANSCORE,"T2" = T2$T2_MEANSCORE,"T3" = T3$T3_MEANSCORE, "T1.b" = T1$T1_MS_binary,"T2.b"= T2$T2_MS_binary,"T3.b"= T3$T3_MS_binary,subset(project11, select = c(STIDnum:RCT_GROUP,Female:T3_pros_T)))
+glimpse(d)
+```
+
+dataframe "d" consists of the meanscores T1,T2 and T3 and their corresponding binary representing 1 for know and 0 for don't know
+and NA for missing. 
+
+```{r}
+summary(as.factor(d$T1.b))
+```
+
+361(13.51%) obs for T1 are don't know in atleast one of the 8 items.
+824(30.84%) obs for T1 are missing in all the 8 items.
+
+```{r}
+summary(as.factor(d$T2.b))
+```
+
+310() obs for T2 are don't know in atleast one of the 8 items.
+748() obs for T2 are missing in all the 8 items.
+
+```{r}
+summary(as.factor(d$T3.b))
+```
+
+213() obs for T3 are don't know in atleast one of the 8 items.
+1304 obs for T3 are missing in all the 8 items.
+
+
+
+```{r}
+cpy<-d
+row_to_keep <- rep(TRUE, 2671)
+for (i in 1:2671){
+  if(cpy$T1[i]=="NaN" & cpy$T2[i]=="NaN" & cpy$T3[i]=="NaN"){
+    row_to_keep[i]<-FALSE
+  }}
+cpy<-cpy[row_to_keep,]
+```
+
+The dataframe "cpy" contains only those observations which are not missing is all the three T1,T2 and T3. 
+
+
+
+```{r}
+library(lme4)
+fit<-glmer(T1.b~(1|School_Recode),family = binomial("logit"),data = cpy)
+summary(fit)
+```
+
+```{r}
+fita<-glm(T1.b~1,data=cpy,family = binomial("logit"))
+summary(fita)
+```
+
+```{r}
+mlm<-cpy
+mlm$T1<-ifelse(mlm$T1=="Don't know" | mlm$T1=="NaN",NA,mlm$T1)
+mlm$T2<-ifelse(mlm$T2=="Don't know" | mlm$T2=="NaN",NA,mlm$T2)
+mlm$T3<-ifelse(mlm$T3=="Don't know" | mlm$T3=="NaN",NA,mlm$T3)
+```
+
+
+
